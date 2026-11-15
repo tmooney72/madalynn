@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}</style>
+<title>A Little Question</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a hidden phrase on letter tiles is the centrepiece, with a letter keyboard under it. Nothing else. */
+  :root {
+    --bg: #ffffff;
+    --ink: #1c1f23;
+    --ink-soft: #6c737c;
+    --green: #5fa85a;
+    --line: #d2d6db;
+    --key: #d8dce1;
+    --miss: #7b8087;
+    --on-fill: #ffffff;
+    --font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+    --font-body: "Inter", "Helvetica Neue", Arial, sans-serif;
+    --tile: min(2.75rem, calc((100vw - 40px - 36px) / 10));
+    color-scheme: light;
+  }
+
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    display: grid;
+    place-items: center;
+    padding-block: 28px;
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  .stage { width: 100%; max-width: 34rem; }
+  .panel { display: flex; flex-direction: column; align-items: center; gap: 1.25rem; text-align: center; }
+
+  .eyebrow {
+    margin: 0; font-size: 0.8125rem; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--green);
+  }
+  h1 {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(1.75rem, 7vw, 2.5rem); line-height: 1.05; letter-spacing: -0.02em;
+    margin: 0; text-wrap: balance;
+  }
+
+  /* the hidden phrase */
+  .board { display: flex; flex-direction: column; align-items: center; gap: 0.625rem; margin-block: 0.5rem; }
+  .word { display: flex; gap: 4px; }
+  .tile {
+    width: var(--tile); height: calc(var(--tile) * 1.15);
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 800; font-size: calc(var(--tile) * 0.6);
+    border-radius: 0.4rem; border: 2px solid var(--line);
+    background: var(--bg); color: transparent;
+    box-sizing: border-box;
+  }
+  .tile.open { background: var(--green); border-color: var(--green); color: var(--on-fill); animation: flip 0.45s ease-out; }
+  @keyframes flip { 0% { transform: rotateX(90deg); } 60% { transform: rotateX(-12deg); } 100% { transform: rotateX(0); } }
+  .board.done .tile { animation: wave 0.5s ease-in-out both; animation-delay: calc(var(--i) * 45ms); }
+  @keyframes wave { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-8px); } }
+
+  .status { margin: 0; min-height: 1.5em; color: var(--ink-soft); font-size: 0.9375rem; }
+  .shake { animation: shake 0.35s ease-in-out; }
+  @keyframes shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+
+  /* letter keys */
+  .keys { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 30rem; }
+  .keys div { display: flex; justify-content: center; gap: 5px; }
+  button { font-family: var(--font-body); font-weight: 600; cursor: pointer; transition: background 0.15s ease; }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  .key {
+    flex: 1 1 0; min-width: 0; max-width: 2.75rem; height: 3rem; padding: 0;
+    border: 0; border-radius: 0.4rem; background: var(--key); color: var(--ink);
+    font-size: 1rem; text-transform: uppercase;
+  }
+  .key:hover:not(:disabled) { background: var(--line); }
+  .key.hit { background: var(--green); color: var(--on-fill); cursor: default; }
+  .key.miss { background: var(--miss); color: var(--on-fill); cursor: default; }
+  .hint {
+    background: transparent; border: 0; color: var(--ink-soft);
+    font-size: 0.875rem; text-decoration: underline; text-underline-offset: 3px; padding: 0.5em;
+  }
+  .hint:hover { color: var(--ink); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tile.open, .board.done .tile, .shake { animation: none; }
+    button { transition: none; }
+  }
+</style>
+
+<main class="stage">
+  <section class="panel" id="game">
+    <p class="eyebrow" id="hello" hidden></p>
+    <h1 id="headline">I've got something to ask you.</h1>
+    <div class="board" id="board" aria-label="Hidden phrase"></div>
+    <p class="status" id="status" aria-live="polite">Guess letters to uncover it.</p>
+    <div class="keys" id="keys"></div>
+    <button type="button" class="hint" id="hint">Stuck? Reveal a letter</button>
+  </section>
+</main>
+
+<script>
+  // ---- Make it yours ----
+  var HER_NAME = "Madalynn";
+  var PHRASE = "WILL YOU BE MY GIRLFRIEND";
+  // -----------------------
+
+  var calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var $ = function (id) { return document.getElementById(id); };
+  if (HER_NAME) { $("hello").textContent = HER_NAME; $("hello").hidden = false; }
+
+  var board = $("board"), keys = $("keys"), status = $("status");
+  var tiles = [], keyFor = {}, guessed = {}, solved = false, n = 0;
+
+  PHRASE.split(" ").forEach(function (word) {
+    var row = document.createElement("div");
+    row.className = "word";
+    word.split("").forEach(function (ch) {
+      var t = document.createElement("span");
+      t.className = "tile";
+      t.dataset.ch = ch;
+      t.style.setProperty("--i", n++);
+      row.appendChild(t);
+      tiles.push(t);
+    });
+    board.appendChild(row);
+  });
+
+  ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"].forEach(function (line) {
+    var row = document.createElement("div");
+    line.split("").forEach(function (ch) {
+      var k = document.createElement("button");
+      k.type = "button";
+      k.className = "key";
+      k.id = "key-" + ch;
+      k.textContent = ch;
+      k.setAttribute("aria-label", "Guess " + ch);
+      k.addEventListener("click", function () { guess(ch); });
+      row.appendChild(k);
+      keyFor[ch] = k;
+    });
+    keys.appendChild(row);
+  });
+
+  var misses = ["No {L} in there.", "Nope, no {L}.", "Not a {L} in sight.", "{L}? Not this time."];
+  var missCount = 0;
+
+  function guess(ch) {
+    if (solved || guessed[ch] || !keyFor[ch]) return;
+    guessed[ch] = true;
+    var k = keyFor[ch], found = 0;
+    k.disabled = true;
+    tiles.forEach(function (t) {
+      if (t.dataset.ch === ch) { t.textContent = ch; t.classList.add("open"); found++; }
+    });
+    if (found) {
+      k.classList.add("hit");
+      status.textContent = found === 1 ? "Yep, one " + ch + "." : "Nice, " + found + " " + ch + "s.";
+    } else {
+      k.classList.add("miss");
+      status.textContent = misses[missCount++ % misses.length].replace("{L}", ch);
+      board.classList.remove("shake");
+      void board.offsetWidth;
+      board.classList.add("shake");
+    }
+    if (tiles.every(function (t) { return t.classList.contains("open"); })) finish();
+  }
+
+  $("hint").addEventListener("click", function () {
+    var left = tiles.filter(function (t) { return !t.classList.contains("open"); });
+    if (left.length) guess(left[(Math.random() * left.length) | 0].dataset.ch);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^[a-zA-Z]$/.test(e.key)) guess(e.key.toUpperCase());
+  });
+
+  function finish() {
+    solved = true;
+    setTimeout(function () {
+      board.classList.remove("shake");
+      board.classList.add("done");
+      status.hidden = true;
+      keys.hidden = true;
+      $("hint").hidden = true;
+    }, calm ? 0 : 600);
+  }
+</script>
+
+</html>
